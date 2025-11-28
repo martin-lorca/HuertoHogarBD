@@ -4,6 +4,7 @@ import com.example.demo.model.Product;
 import com.example.demo.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize; // Importación necesaria para las anotaciones
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,29 +17,29 @@ public class ProductController {
     @Autowired
     private ProductService productService;
 
-    // GET /api/products
+    // GET /api/products: Público (Cualquier usuario o anónimo puede ver)
     @GetMapping
     public List<Product> getAllProducts() {
         return productService.findAllProducts();
     }
 
-    // GET /api/products/{id}
+    // GET /api/products/{id}: Público
     @GetMapping("/{id}")
     public ResponseEntity<Product> getProductById(@PathVariable Long id) {
-        // Usa ResponseEntity para manejar la respuesta HTTP (200 OK o 404 Not Found)
         Optional<Product> product = productService.findProductById(id);
         return product.map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    // POST /api/products (Crear)
+    // POST /api/products (Crear): REQUIERE ROL ADMIN
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public Product createProduct(@RequestBody Product product) {
-        // @RequestBody mapea el JSON que viene del React a un objeto Product de Java
         return productService.saveProduct(product);
     }
 
-    // PUT /api/products/{id} (Actualizar)
+    // PUT /api/products/{id} (Actualizar): REQUIERE ROL ADMIN
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<Product> updateProduct(@PathVariable Long id, @RequestBody Product productDetails) {
         Optional<Product> existingProduct = productService.findProductById(id);
@@ -57,7 +58,8 @@ public class ProductController {
         return ResponseEntity.notFound().build();
     }
 
-    // DELETE /api/products/{id} (Eliminar)
+    // DELETE /api/products/{id} (Eliminar): REQUIERE ROL ADMIN
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
         productService.deleteProduct(id);
