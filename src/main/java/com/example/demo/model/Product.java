@@ -1,6 +1,5 @@
 package com.example.demo.model;
 
-
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -24,16 +23,19 @@ public class Product {
     public Product() {
     }
 
-
+    // Constructor con argumentos
     public Product(String name, String description, double price, int stock) {
         this.name = name;
         this.description = description;
         this.price = price;
         this.stock = stock;
-    }
+    } // <-- ¡Cierre de constructor agregado aquí!
 
+    // =========================================================================
     // Getters y Setters
-    public Long getId() {
+    // =========================================================================
+
+    public Long getId() { // <-- ¡Método corregido!
         return id;
     }
 
