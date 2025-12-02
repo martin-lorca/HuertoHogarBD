@@ -16,7 +16,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-
 @Component
 public class JwtRequestFilter extends OncePerRequestFilter {
     @Autowired
@@ -34,38 +33,48 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         String username = null;
         String jwtToken = null;
 
-        // JWT Token está en la forma "Bearer token". Removemos Bearer y obtenemos solo el token
+        // 1. Intentar extraer el token
         if (requestTokenHeader != null && requestTokenHeader.startsWith("Bearer ")) {
             jwtToken = requestTokenHeader.substring(7);
+
             try {
+                // 2. Intentar obtener el username del token
                 username = jwtTokenUtil.getUsernameFromToken(jwtToken);
             } catch (IllegalArgumentException e) {
-                logger.error("No se puede obtener el token JWT");
+                // Token malformado. Registramos el error y continuamos la cadena SIN detenerla.
+                logger.warn("No se pudo obtener el token JWT, probablemente malformado.", e);
             } catch (ExpiredJwtException e) {
-                logger.error("El token JWT ha expirado");
+                // Token expirado. Registramos el error y continuamos la cadena SIN detenerla.
+                logger.warn("El token JWT ha expirado.", e);
             }
-        } else {
-            logger.warn("El token JWT no comienza con Bearer String o es nulo");
         }
+        // ⚠️ Si el token es nulo o malformado, 'username' sigue siendo nulo.
+        //    Esto permite que la solicitud pase a la cadena de seguridad para que
+        //    SecurityConfig decida si la ruta es permitAll() o authenticated().
 
-        // Una vez que obtenemos el token, lo validamos.
+
+        // 3. Validar e inyectar el contexto de seguridad si el usuario fue extraído
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
-            // Si el token es válido, configura Spring Security para establecer la autenticación
+            // Validar si el token es válido y corresponde al usuario
             if (jwtTokenUtil.validateToken(jwtToken, userDetails)) {
 
+                // Crea el token de autenticación de Spring Security
                 UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
                 usernamePasswordAuthenticationToken
                         .setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                // Después de establecer la autenticación, especificamos que el usuario actual está autenticado.
-                // Esto pasa la seguridad de Spring satisfactoriamente.
+                // Establece el usuario en el contexto de seguridad para esta solicitud
                 SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
             }
         }
+
+        // 4. Continuar la cadena de filtros.
+        // Este paso es CLAVE: garantiza que todas las solicitudes (con o sin token)
+        // lleguen a la configuración final de Spring Security.
         chain.doFilter(request, response);
     }
 }

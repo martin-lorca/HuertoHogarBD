@@ -4,6 +4,7 @@ import com.example.demo.security.JwtRequestFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -15,55 +16,61 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-// @Configuration: Configuración de Spring
 @Configuration
-// @EnableWebSecurity: Habilita la seguridad web de Spring
 @EnableWebSecurity
 public class WebSecurityConfig {
 
-    // Necesitamos este servicio para cargar el usuario desde la BD
     @Autowired
     private UserDetailsService userDetailsService;
 
-    // Inyectamos el filtro de JWT que crearemos en el próximo paso
     @Autowired
     private JwtRequestFilter jwtRequestFilter;
 
-    // Define el codificador de contraseñas (BCrypt)
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // Expone el AuthenticationManager (necesario para el login)
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
-    // Configuración de la cadena de filtros de seguridad
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 // 1. Deshabilitar CSRF (necesario para REST APIs)
                 .csrf(csrf -> csrf.disable())
 
-                // 2. Definir las políticas de autorización (qué rutas son públicas/privadas)
+                // 2. Definir las políticas de autorización
                 .authorizeHttpRequests(auth -> auth
-                        // Endpoints públicos (Registro y Login)
+                        // 🎯 2.1. Endpoints públicos (Registro y Login)
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
-                        // Endpoints públicos para productos (cualquiera puede ver los productos)
-                        .requestMatchers("/api/products", "/api/products/**").permitAll()
-                        // Endpoints públicos para el carrito (cualquiera puede interactuar con su carrito)
-                        .requestMatchers("/api/cart", "/api/cart/**").permitAll()
-                        // Cualquier otra petición requiere autenticación (JWT)
+
+                        // 🎯 2.2. Endpoints de LECTURA (GET) de Productos: PÚBLICOS
+                        .requestMatchers(HttpMethod.GET, "/api/products", "/api/products/**").permitAll()
+
+                        // 🎯 2.3. Endpoints de ESCRITURA (POST, PUT, DELETE) y Carrito: REQUIEREN TOKEN
+                        //         La autorización por ROL será manejada por @PreAuthorize en los Controllers.
+
+                        // Rutas de Carrito (asumiendo que POST/GET/DELETE requiere usuario logueado)
+                        .requestMatchers("/api/cart", "/api/cart/**").authenticated()
+
+                        // Rutas de Escritura de Productos (POST, PUT, DELETE)
+                        // Estas rutas están protegidas por hasRole() vía @PreAuthorize,
+                        // pero primero deben pasar la autenticación (Token válido).
+                        .requestMatchers(HttpMethod.POST, "/api/products").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/products/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/products/**").authenticated()
+
+                        // 2.4. Cualquier otra petición
                         .anyRequest().authenticated()
                 )
 
                 // 3. Configuración de sesión: Sin estado (STATELESS) para usar JWT
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        // 4. Agregar el filtro de JWT antes del filtro estándar de Spring Security
+        // 4. Agregar el filtro de JWT
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
