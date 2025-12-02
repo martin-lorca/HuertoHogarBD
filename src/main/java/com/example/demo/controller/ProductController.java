@@ -31,8 +31,8 @@ public class ProductController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    // POST /api/products (Crear): REQUIERE ROL ADMIN
-    @PreAuthorize("hasRole('ADMIN')")
+    // POST /api/products (Crear):
+    @PreAuthorize("hasRole('USER')")
     @PostMapping
     public Product createProduct(@RequestBody Product product) {
         return productService.saveProduct(product);

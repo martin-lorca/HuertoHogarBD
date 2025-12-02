@@ -3,44 +3,136 @@ package com.example.demo.config;
 import com.example.demo.model.Product;
 import com.example.demo.model.User;
 import com.example.demo.repository.ProductRepository;
-import com.example.demo.repository.UserRepository; // Importar Repositorio de Usuario
+import com.example.demo.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.crypto.password.PasswordEncoder; // Importar PasswordEncoder
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 
-// @Configuration: Indica que esta clase proporciona beans de configuración
 @Configuration
 public class DataInitializer {
 
-    // @Bean crea una instancia de CommandLineRunner que se ejecuta automáticamente
     @Bean
     public CommandLineRunner loadData(
             ProductRepository productRepository,
-            UserRepository userRepository, // Inyectar UserRepository
-            PasswordEncoder passwordEncoder // Inyectar PasswordEncoder
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder
     ) {
         return (args) -> {
             System.out.println("Cargando datos iniciales...");
 
-            // --- 1. CARGA DE PRODUCTOS (Se mantiene igual) ---
+            // --- 1. CARGA DE PRODUCTOS (VALORES ACTUALIZADOS) ---
             if (productRepository.count() == 0) {
                 System.out.println("Cargando productos iniciales...");
-                productRepository.save(new Product("Manzanas fuji", "Manzanas Fuji crujientes y dulces...", 1200, 150));
-                productRepository.save(new Product("Naranjas valencia", "Jugosas y ricas en vitamina C...", 1000, 200));
-                productRepository.save(new Product("Plátanos cavendish", "Plátanos maduros y dulces...", 800, 250));
-                productRepository.save(new Product("Zanahorias Orgánicas", "Zanahorias crujientes cultivadas sin pesticidas...", 900, 100));
-                productRepository.save(new Product("Espinacas frescas", "Espinacas frescas y nutritivas...", 700, 80));
-                productRepository.save(new Product("Pimientos tricolor", "Pimientos rojos, amarillos y verdes...", 1500, 120));
-                productRepository.save(new Product("Miel orgánica", "Miel pura y orgánica...", 5000, 50));
-                productRepository.save(new Product("Quinoa orgánica", "Quinoa orgánica cultivada en los Andes...", 800, 130));
-                productRepository.save(new Product("Leche entera", "Leche entera fresca y nutritiva...", 800, 120));
+
+                // NOTA: Los nuevos parámetros en el constructor son:
+                // (name, price, unit, stock, imageRes, description, rating, categoryId)
+
+                productRepository.save(new Product(
+                        "Manzanas fuji",
+                        1200,
+                        "kg",
+                        150,
+                        101,
+                        "Manzanas Fuji crujientes y dulces...",
+                        4.8,
+                        "FRUTAS"
+                ));
+
+                productRepository.save(new Product(
+                        "Naranjas valencia",
+                        1000,
+                        "kg",
+                        200,
+                        102,
+                        "Jugosas y ricas en vitamina C...",
+                        4.5,
+                        "FRUTAS"
+                ));
+
+                productRepository.save(new Product(
+                        "Plátanos cavendish",
+                        800,
+                        "docena",
+                        250,
+                        103,
+                        "Plátanos maduros y dulces...",
+                        4.2,
+                        "FRUTAS"
+                ));
+
+                productRepository.save(new Product(
+                        "Zanahorias Orgánicas",
+                        900,
+                        "manojo",
+                        100,
+                        104,
+                        "Zanahorias crujientes cultivadas sin pesticidas...",
+                        4.7,
+                        "VEGETALES"
+                ));
+
+                productRepository.save(new Product(
+                        "Espinacas frescas",
+                        700,
+                        "bolsa",
+                        80,
+                        105,
+                        "Espinacas frescas y nutritivas...",
+                        4.6,
+                        "VEGETALES"
+                ));
+
+                productRepository.save(new Product(
+                        "Pimientos tricolor",
+                        1500,
+                        "unidad",
+                        120,
+                        106,
+                        "Pimientos rojos, amarillos y verdes...",
+                        4.4,
+                        "VEGETALES"
+                ));
+
+                productRepository.save(new Product(
+                        "Miel orgánica",
+                        5000,
+                        "tarro",
+                        50,
+                        107,
+                        "Miel pura y orgánica...",
+                        4.9,
+                        "DESPENSA"
+                ));
+
+                productRepository.save(new Product(
+                        "Quinoa orgánica",
+                        800,
+                        "bolsa",
+                        130,
+                        108,
+                        "Quinoa orgánica cultivada en los Andes...",
+                        4.3,
+                        "DESPENSA"
+                ));
+
+                productRepository.save(new Product(
+                        "Leche entera",
+                        800,
+                        "litro",
+                        120,
+                        109,
+                        "Leche entera fresca y nutritiva...",
+                        4.5,
+                        "LACTEOS"
+                ));
+
                 System.out.println("Productos cargados. Total: " + productRepository.count());
             }
 
-            // --- 2. CREACIÓN DE USUARIO ADMINISTRADOR ---
+            // --- 2. CREACIÓN DE USUARIO ADMINISTRADOR (Se mantiene igual) ---
             final String adminUsername = "admin@huerto.cl";
 
             if (!userRepository.existsByUsername(adminUsername)) {
@@ -53,7 +145,7 @@ public class DataInitializer {
                         adminUsername,
                         encodedPassword,
                         "Administrador del Huerto",
-                        List.of("ROLE_USER", "ROLE_ADMIN") // ¡Le damos ambos roles!
+                        List.of("ROLE_USER", "ROLE_ADMIN")
                 );
 
                 userRepository.save(adminUser);
