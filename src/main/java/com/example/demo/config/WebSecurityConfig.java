@@ -26,6 +26,14 @@ public class WebSecurityConfig {
     @Autowired
     private JwtRequestFilter jwtRequestFilter;
 
+    // Definimos las rutas de Swagger/OpenAPI que deben ser públicas.
+    private static final String[] SWAGGER_WHITELIST = {
+            "/v3/api-docs/**", // Especificación JSON/YAML
+            "/swagger-ui/**",  // Interfaz de usuario estática
+            "/swagger-ui.html" // Punto de entrada principal
+    };
+
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -44,6 +52,10 @@ public class WebSecurityConfig {
 
                 // 2. Definir las políticas de autorización
                 .authorizeHttpRequests(auth -> auth
+
+                        // 🎯 2.0. Rutas de Swagger/OpenAPI: ACCESO PÚBLICO A LA DOCUMENTACIÓN
+                        .requestMatchers(SWAGGER_WHITELIST).permitAll()
+
                         // 🎯 2.1. Endpoints públicos (Registro y Login)
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
 
@@ -51,8 +63,6 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/products", "/api/products/**").permitAll()
 
                         // 🎯 2.3. Endpoints de ESCRITURA (POST, PUT, DELETE) y Carrito: REQUIEREN TOKEN
-                        //         La autorización por ROL será manejada por @PreAuthorize en los Controllers.
-
                         // Rutas de Carrito (asumiendo que POST/GET/DELETE requiere usuario logueado)
                         .requestMatchers("/api/cart", "/api/cart/**").authenticated()
 
