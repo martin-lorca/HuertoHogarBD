@@ -20,7 +20,10 @@ public class Product {
     private int imageRes; // Corresponde a val imageRes: Int
     private String description; // Corresponde a val description: String (Tu modelo original tenía este duplicado, lo dejamos una vez)
     private Double rating; // Corresponde a val rating: Double
-    private String categoryId; // Corresponde a val categoryId: String (Llave foránea para la categoría)
+    private String categoryId;
+    @Transient
+    private String imageUrl;
+    // Corresponde a val categoryId: String (Llave foránea para la categoría)
 
     @Transient // Indica a JPA que ignore este campo en la base de datos (se usa solo en la lógica de la aplicación)
     private int cantidad = 0; // Corresponde a var cantidad: Int = 0 (usamos 'var' en Kotlin, que implica que es mutable)
@@ -129,4 +132,13 @@ public class Product {
     public void setDescription(String description) {
         this.description = description;
     }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
 }
