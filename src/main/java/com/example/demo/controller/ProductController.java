@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
-
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/api/products")
 public class ProductController {
@@ -32,14 +32,14 @@ public class ProductController {
     }
 
     // POST /api/products (Crear):
-    @PreAuthorize("hasRole('USER')")
+
     @PostMapping
     public Product createProduct(@RequestBody Product product) {
         return productService.saveProduct(product);
     }
 
     // PUT /api/products/{id} (Actualizar): REQUIERE ROL ADMIN
-    @PreAuthorize("hasRole('ADMIN')")
+
     @PutMapping("/{id}")
     public ResponseEntity<Product> updateProduct(@PathVariable Long id, @RequestBody Product productDetails) {
         Optional<Product> existingProduct = productService.findProductById(id);
