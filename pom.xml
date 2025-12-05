@@ -5,8 +5,10 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.0</version>
-        <relativePath/> </parent>
+        <!-- VERSION: 3.3.0 -->
+        <version>3.3.0</version>
+        <relativePath/>
+    </parent>
     <groupId>com.example</groupId>
     <artifactId>demo</artifactId>
     <version>0.0.1-SNAPSHOT</version>
@@ -26,8 +28,14 @@
         <url/>
     </scm>
     <properties>
-        <java.version>17</java.version>
-        <jjwt.version>0.12.5</jjwt.version> <springdoc.version>2.5.0</springdoc.version>
+        <!-- FIX CRÍTICO 1/2: Sobrescribimos Mockito para que use una versión (5.12.0+) compatible con Java 24 -->
+        <mockito.version>5.12.0</mockito.version>
+        <!-- FIX CRÍTICO 2/2: Forzamos la versión de Byte Buddy a 1.14.17 para asegurar compatibilidad con Java 24 bytecode (clase versión 68) -->
+        <byte-buddy.version>1.14.17</byte-buddy.version>
+        <!-- Ajustado a la versión LTS más reciente soportada (o 22, o 24) -->
+        <java.version>21</java.version>
+        <jjwt.version>0.12.5</jjwt.version>
+        <springdoc.version>2.5.0</springdoc.version>
     </properties>
     <dependencies>
         <dependency>
@@ -54,32 +62,55 @@
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
-            <version>0.12.5</version>
+            <version>${jjwt.version}</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-impl</artifactId>
-            <version>0.12.5</version>
+            <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.5</version>
+            <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
 
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.5.0</version>
+            <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- Spring Boot Test Starter (incluye JUnit 5 y Mockito) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- FIX: Inclusión explícita de Mockito con la versión compatible para sobrescribir la versión del starter -->
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- DEPENDENCIA AÑADIDA: NECESARIA PARA TESTEAR CLASES DE SEGURIDAD -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <build>

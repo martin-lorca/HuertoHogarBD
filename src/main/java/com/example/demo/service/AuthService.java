@@ -3,7 +3,6 @@ package com.example.demo.service;
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.security.JwtTokenUtil;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -16,17 +15,20 @@ import java.util.List;
 @Service
 public class AuthService {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+    private final JwtTokenUtil jwtTokenUtil;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder; // Se usará para cifrar contraseñas
-
-    @Autowired
-    private AuthenticationManager authenticationManager; // Gestiona el login
-
-    @Autowired
-    private JwtTokenUtil jwtTokenUtil; // Genera el token
+    // Inyección por constructor: Spring inyecta las dependencias aquí.
+    // Mockito puede inyectar los Mocks aquí automáticamente.
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                       AuthenticationManager authenticationManager, JwtTokenUtil jwtTokenUtil) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.authenticationManager = authenticationManager;
+        this.jwtTokenUtil = jwtTokenUtil;
+    }
 
 
     // --- 1. REGISTRO DE USUARIO ---
