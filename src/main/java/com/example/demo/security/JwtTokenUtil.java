@@ -1,45 +1,36 @@
-package com.example.demo.security; // Ajusta el paquete si es necesario
+package com.example.demo.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import com.example.demo.model.User;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.function.Function;
 
 @Component
 public class JwtTokenUtil {
 
-    // La clave secreta debe ser fuerte y almacenada de forma segura (por ejemplo, en application.properties).
-    // Nota: El valor por defecto "tuclavesecreta..." es solo para desarrollo. ¡Cámbialo!
-    @Value("${jwt.secret:tuclavesecretadeproducciondebescambiarlaahora}")
-    private String secret;
+    // La clave secreta (desde application.properties: jwt.secret)
+    @Value("${jwt.secret}")
+    private String jwtSecret;
 
-    // Tiempo de validez del token: 10 horas
-    public static final long JWT_TOKEN_VALIDITY = 10 * 60 * 60; // en segundos
+    // El tiempo de expiración en milisegundos (desde application.properties: jwt.expiration.ms)
+    @Value("${jwt.expiration.ms}")
+    private int jwtExpirationMs;
 
     // --- MÉTODOS DE LECTURA Y EXTRACCIÓN (Parsing) ---
 
     /**
      * Recupera el nombre de usuario (Subject) del token JWT.
      */
-    public String getUsernameFromToken(String token) {
+    public String getUserNameFromJwtToken(String token) {
         return getClaimFromToken(token, Claims::getSubject);
-    }
-
-    /**
-     * Recupera la fecha de expiración del token JWT.
-     */
-    public Date getExpirationDateFromToken(String token) {
-        return getClaimFromToken(token, Claims::getExpiration);
     }
 
     /**
@@ -54,9 +45,9 @@ public class JwtTokenUtil {
      * Obtiene todos los Claims (cuerpo) del token después de validarlo con la clave.
      */
     private Claims getAllClaimsFromToken(String token) {
-        // 🥇 Opción 1: La mejor práctica, usando la sintaxis moderna (0.11.0+)
+        // <--- AJUSTE CLAVE: Usamos la sintaxis antigua compatible con versiones anteriores de JJWT
         return Jwts.parser()
-                .setSigningKey(signingKey())
+                .setSigningKey(key()) // Usamos el método key() para obtener la clave
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
@@ -68,42 +59,39 @@ public class JwtTokenUtil {
      * Verifica si el token ha expirado.
      */
     private Boolean isTokenExpired(String token) {
-        final Date expiration = getExpirationDateFromToken(token);
+        final Date expiration = getClaimFromToken(token, Claims::getExpiration);
         return expiration.before(new Date());
     }
 
     /**
      * Valida el token contra los detalles del usuario.
      */
-    public Boolean validateToken(String token, UserDetails userDetails) {
-        final String username = getUsernameFromToken(token);
-        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+    public Boolean validateJwtToken(String token, UserDetails userDetails) {
+        try {
+            final String username = getUserNameFromJwtToken(token);
+            // Si el token es parsable, no ha expirado y el username coincide
+            return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+        } catch (Exception e) {
+            // Manejo genérico de errores de parsing/validación
+            return false;
+        }
     }
 
     // --- MÉTODOS DE GENERACIÓN (Building) ---
 
     /**
-     * Genera el token JWT a partir de los detalles del usuario.
+     * Genera el token JWT a partir de la autenticación de Spring Security.
      */
-    public String generateToken(UserDetails userDetails) {
-        Map<String, Object> claims = new HashMap<>();
-        // Puedes añadir información adicional (ej. roles, ID) a los claims
-        claims.put("roles", userDetails.getAuthorities());
-        return doGenerateToken(claims, userDetails.getUsername());
-    }
+    public String generateJwtToken(Authentication authentication) {
+        // Tu entidad User es el Principal aquí
+        User userPrincipal = (User) authentication.getPrincipal();
 
-    /**
-     * Creación del token: Define expiración, firma y sujeto (username).
-     */
-    private String doGenerateToken(Map<String, Object> claims, String subject) {
-        // Usa Jwts.builder() para construir el token
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject) // 'subject' es el username/email
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY * 1000))
-                .signWith(signingKey(), SignatureAlgorithm.HS256) // Firma con clave y algoritmo
-                .compact(); // Finaliza la creación y serializa a String
+                .setSubject((userPrincipal.getUsername()))
+                .setIssuedAt(new Date())
+                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs)) // Usa la propiedad de application.properties
+                .signWith(key(), SignatureAlgorithm.HS256)
+                .compact();
     }
 
     // --- GESTIÓN DE CLAVES ---
@@ -111,10 +99,9 @@ public class JwtTokenUtil {
     /**
      * Decodifica la clave secreta base64 para su uso en la firma/verificación.
      */
-    private Key signingKey() {
-        // Decodifica la clave secreta que está en Base64
-        byte[] keyBytes = Decoders.BASE64.decode(this.secret);
-        // Crea una clave HMAC ShaKey para la firma
+    private Key key() {
+        // Usamos jwtSecret, el nombre de campo ajustado
+        byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }

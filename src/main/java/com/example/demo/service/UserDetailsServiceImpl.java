@@ -7,6 +7,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; // Importación nueva
 
 import java.util.Optional;
 
@@ -18,12 +19,14 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
     // Método que Spring Security llama para cargar un usuario por su username (email)
     @Override
+    @Transactional // Buena práctica para asegurar que la sesión de JPA esté abierta
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
 
+        // El mensaje de error fue ajustado para reflejar que buscas por username
         Optional<User> userOptional = userRepository.findByUsername(username);
 
         if (userOptional.isEmpty()) {
-            throw new UsernameNotFoundException("Usuario no encontrado con email: " + username);
+            throw new UsernameNotFoundException("Usuario no encontrado: " + username);
         }
 
         // Devolvemos el objeto User (que implementa UserDetails)

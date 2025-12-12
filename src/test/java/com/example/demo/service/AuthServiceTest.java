@@ -3,7 +3,6 @@ package com.example.demo.service;
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.security.JwtTokenUtil;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -13,18 +12,17 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
  * Pruebas unitarias para la clase AuthService.
- * Utilizamos @ExtendWith(MockitoExtension.class) para habilitar las anotaciones de Mockito.
+ * Reflejando los cambios: registerUser acepta roles y lanza RuntimeException.
  */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -47,13 +45,16 @@ class AuthServiceTest {
     private final String TEST_USERNAME = "test@example.com";
     private final String TEST_PASSWORD = "password123";
     private final String TEST_FULLNAME = "Test User";
+    private final List<String> TEST_ROLES = List.of("ROLE_USER");
     private final String ENCODED_PASSWORD = "encoded_password";
     private final String GENERATED_TOKEN = "jwt.token.generated";
 
-    // Setup: Inicialización común antes de cada test si fuera necesario.
-    // En este caso, @InjectMocks se encarga de inyectar las dependencias al constructor
-    // antes de cada prueba, por lo que este método puede ser omitido o usado para
-    // configuraciones más complejas.
+    // Mocks comunes para login
+    @Mock
+    private Authentication authenticationMock;
+    @Mock
+    private User userPrincipalMock; // Usamos la entidad User como Principal
+
 
     // =========================================================================
     //                            PRUEBAS DE REGISTRO
@@ -63,42 +64,43 @@ class AuthServiceTest {
      * Prueba 1: Verifica que el registro de un usuario nuevo se realiza con éxito.
      */
     @Test
-    void testRegisterUser_Success_ReturnsNewUser() throws Exception {
+    void testRegisterUser_Success_ReturnsNewUser() {
         // Configuración (Arrange)
         when(userRepository.existsByUsername(TEST_USERNAME)).thenReturn(false);
         when(passwordEncoder.encode(TEST_PASSWORD)).thenReturn(ENCODED_PASSWORD);
 
         // El mock simulará guardar el usuario y devolverlo.
-        User expectedUser = new User(TEST_USERNAME, ENCODED_PASSWORD, TEST_FULLNAME, List.of("ROLE_USER"));
+        User expectedUser = new User(TEST_USERNAME, ENCODED_PASSWORD, TEST_FULLNAME, TEST_ROLES);
         when(userRepository.save(any(User.class))).thenReturn(expectedUser);
 
         // Ejecución (Act)
-        User resultUser = authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME);
+        // Se llama al nuevo método con el parámetro 'roles'
+        User resultUser = authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME, TEST_ROLES);
 
         // Verificación (Assert)
         assertNotNull(resultUser);
         assertEquals(TEST_USERNAME, resultUser.getUsername());
         assertEquals(ENCODED_PASSWORD, resultUser.getPassword());
-
-        // Verificamos que se llamó al método save en el repositorio
+        assertTrue(resultUser.getRoles().contains("ROLE_USER"));
         verify(userRepository, times(1)).save(any(User.class));
     }
 
     /**
-     * Prueba 2: Verifica que se lanza una excepción si el nombre de usuario (email) ya existe.
+     * Prueba 2: Verifica que se lanza una RuntimeException si el nombre de usuario ya existe.
      */
     @Test
-    void testRegisterUser_UserAlreadyExists_ThrowsException() {
+    void testRegisterUser_UserAlreadyExists_ThrowsRuntimeException() {
         // Configuración (Arrange)
         when(userRepository.existsByUsername(TEST_USERNAME)).thenReturn(true);
 
         // Ejecución y Verificación (Act & Assert)
-        Exception exception = assertThrows(Exception.class, () -> {
-            authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME);
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            // Se llama al nuevo método con el parámetro 'roles'
+            authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME, TEST_ROLES);
         });
 
-        assertEquals("El email ya está registrado.", exception.getMessage());
-        // Verificamos que NO se llamó al método save (no tiene sentido guardar si ya existe)
+        assertEquals("El nombre de usuario " + TEST_USERNAME + " ya está en uso.", exception.getMessage());
+        // Verificamos que NO se llamó al método save
         verify(userRepository, never()).save(any(User.class));
     }
 
@@ -106,91 +108,76 @@ class AuthServiceTest {
      * Prueba 3: Verifica que la contraseña SIEMPRE se cifra antes de guardar.
      */
     @Test
-    void testRegisterUser_PasswordIsEncoded() throws Exception {
+    void testRegisterUser_PasswordIsEncoded() {
         // Configuración (Arrange)
         when(userRepository.existsByUsername(TEST_USERNAME)).thenReturn(false);
         when(passwordEncoder.encode(TEST_PASSWORD)).thenReturn(ENCODED_PASSWORD);
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0)); // Devuelve el objeto que se intentó guardar
-
-        // Ejecución (Act)
-        User resultUser = authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME);
-
-        // Verificación (Assert)
-        // 1. Verificamos que se usó el encoder
-        verify(passwordEncoder, times(1)).encode(TEST_PASSWORD);
-        // 2. Verificamos que el usuario guardado tiene la contraseña codificada
-        assertEquals(ENCODED_PASSWORD, resultUser.getPassword());
-    }
-
-    /**
-     * Prueba 4: Verifica que al nuevo usuario se le asigna el rol por defecto (ROLE_USER).
-     */
-    @Test
-    void testRegisterUser_AssignsDefaultRole() throws Exception {
-        // Configuración (Arrange)
-        when(userRepository.existsByUsername(TEST_USERNAME)).thenReturn(false);
-        when(passwordEncoder.encode(TEST_PASSWORD)).thenReturn(ENCODED_PASSWORD);
-
-        // Capturamos el argumento de save para verificar sus roles
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Ejecución (Act)
-        User resultUser = authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME);
+        authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME, TEST_ROLES);
 
         // Verificación (Assert)
+        // Verificamos que se usó el encoder
+        verify(passwordEncoder, times(1)).encode(TEST_PASSWORD);
+        // La verificación de que la contraseña guardada es la codificada se realiza dentro del .save
+        verify(userRepository, times(1)).save(argThat(user -> user.getPassword().equals(ENCODED_PASSWORD)));
+    }
+
+    /**
+     * Prueba 4: Verifica que si se pasan roles nulos, se asigna el rol por defecto (ROLE_USER).
+     */
+    @Test
+    void testRegisterUser_NullRoles_AssignsDefaultRole() {
+        // Configuración (Arrange)
+        when(userRepository.existsByUsername(TEST_USERNAME)).thenReturn(false);
+        when(passwordEncoder.encode(TEST_PASSWORD)).thenReturn(ENCODED_PASSWORD);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Ejecución (Act)
+        // Pasamos roles como null
+        User resultUser = authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME, null);
+
+        // Verificación (Assert)
+        assertEquals(1, resultUser.getRoles().size());
         assertTrue(resultUser.getRoles().contains("ROLE_USER"));
     }
 
     /**
-     * Prueba 5: Verifica que el método save() del repositorio es llamado exactamente una vez.
+     * Prueba 5: Verifica que se pueden asignar roles específicos (ej. ROLE_ADMIN).
      */
     @Test
-    void testRegisterUser_SavesUserToRepository() throws Exception {
+    void testRegisterUser_AssignsSpecificRole() {
         // Configuración (Arrange)
+        List<String> adminRoles = List.of("ROLE_ADMIN");
         when(userRepository.existsByUsername(TEST_USERNAME)).thenReturn(false);
         when(passwordEncoder.encode(TEST_PASSWORD)).thenReturn(ENCODED_PASSWORD);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Ejecución (Act)
-        authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME);
+        User resultUser = authService.registerUser(TEST_USERNAME, TEST_PASSWORD, TEST_FULLNAME, adminRoles);
 
         // Verificación (Assert)
-        // Verificamos que se llamó exactamente 1 vez al método save
-        verify(userRepository, times(1)).save(any(User.class));
+        assertTrue(resultUser.getRoles().contains("ROLE_ADMIN"));
+        assertFalse(resultUser.getRoles().contains("ROLE_USER")); // Si se especifica, no se pone el default
     }
 
 
     // =========================================================================
-    //                             PRUEBAS DE LOGIN
+    //                             PRUEBAS DE LOGIN (Actualizadas)
     // =========================================================================
-
-    /**
-     * Mock para simular los detalles del usuario autenticado.
-     */
-    @Mock
-    private UserDetails userDetailsMock;
-
-    /**
-     * Mock para simular el objeto de autenticación devuelto por AuthenticationManager.
-     */
-    @Mock
-    private Authentication authenticationMock;
-
 
     /**
      * Prueba 6: Verifica que un inicio de sesión exitoso devuelve un token JWT.
      */
     @Test
-    void testLogin_Success_ReturnsToken() throws Exception {
+    void testLogin_Success_ReturnsToken() {
         // Configuración (Arrange)
         // 1. Configurar AuthenticationManager para devolver un objeto Authentication exitoso
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(authenticationMock);
 
-        // 2. Configurar el objeto Authentication para devolver los UserDetails
-        when(authenticationMock.getPrincipal()).thenReturn(userDetailsMock);
-
-        // 3. Configurar JwtTokenUtil para generar el token
-        when(jwtTokenUtil.generateToken(userDetailsMock)).thenReturn(GENERATED_TOKEN);
+        // 2. Configurar JwtTokenUtil para usar la nueva firma: generateJwtToken(Authentication)
+        when(jwtTokenUtil.generateJwtToken(authenticationMock)).thenReturn(GENERATED_TOKEN);
 
         // Ejecución (Act)
         String token = authService.login(TEST_USERNAME, TEST_PASSWORD);
@@ -198,8 +185,8 @@ class AuthServiceTest {
         // Verificación (Assert)
         assertNotNull(token);
         assertEquals(GENERATED_TOKEN, token);
-        // Verificamos que el token se generó con los detalles del usuario correcto
-        verify(jwtTokenUtil, times(1)).generateToken(userDetailsMock);
+        // Verificamos que el token se generó con el objeto Authentication (la nueva firma)
+        verify(jwtTokenUtil, times(1)).generateJwtToken(authenticationMock);
     }
 
     /**
@@ -219,25 +206,24 @@ class AuthServiceTest {
         });
 
         // Verificamos que si la autenticación falla, NO se intenta generar el token
-        verify(jwtTokenUtil, never()).generateToken(any());
+        verify(jwtTokenUtil, never()).generateJwtToken(any());
     }
 
     /**
-     * Prueba 8: Verifica que se llama al método generateToken del JwtTokenUtil.
+     * Prueba 8: Verifica que se llama al método generateJwtToken del JwtTokenUtil (la nueva firma).
      */
     @Test
-    void testLogin_TokenGenerationCalled() throws Exception {
+    void testLogin_TokenGenerationCalledWithAuthenticationObject() {
         // Configuración (Arrange)
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(authenticationMock);
-        when(authenticationMock.getPrincipal()).thenReturn(userDetailsMock);
-        when(jwtTokenUtil.generateToken(userDetailsMock)).thenReturn(GENERATED_TOKEN);
+        when(jwtTokenUtil.generateJwtToken(authenticationMock)).thenReturn(GENERATED_TOKEN);
 
         // Ejecución (Act)
         authService.login(TEST_USERNAME, TEST_PASSWORD);
 
         // Verificación (Assert)
-        // Verificamos que se llamó exactamente una vez al método generateToken
-        verify(jwtTokenUtil, times(1)).generateToken(userDetailsMock);
+        // Verificamos que se llamó exactamente una vez al método generateJwtToken con el objeto Authentication
+        verify(jwtTokenUtil, times(1)).generateJwtToken(authenticationMock);
     }
 
     /**
@@ -245,11 +231,10 @@ class AuthServiceTest {
      * con el token de usuario/contraseña correcto.
      */
     @Test
-    void testLogin_CallsAuthenticationManager() throws Exception {
+    void testLogin_CallsAuthenticationManager() {
         // Configuración (Arrange)
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(authenticationMock);
-        when(authenticationMock.getPrincipal()).thenReturn(userDetailsMock);
-        when(jwtTokenUtil.generateToken(userDetailsMock)).thenReturn(GENERATED_TOKEN);
+        when(jwtTokenUtil.generateJwtToken(authenticationMock)).thenReturn(GENERATED_TOKEN);
 
         // Ejecución (Act)
         authService.login(TEST_USERNAME, TEST_PASSWORD);
@@ -263,22 +248,19 @@ class AuthServiceTest {
     }
 
     /**
-     * Prueba 10: Verifica que se extrae correctamente el objeto UserDetails del resultado de la autenticación.
+     * Prueba 10: Verifica que el AuthenticationManager es llamado exactamente una vez durante el login.
      */
     @Test
-    void testLogin_ExtractsUserDetailsFromAuthentication() throws Exception {
+    void testLogin_AuthenticationManagerCalledOnce() {
         // Configuración (Arrange)
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(authenticationMock);
-        when(authenticationMock.getPrincipal()).thenReturn(userDetailsMock); // Simula la extracción de UserDetails
-        when(jwtTokenUtil.generateToken(userDetailsMock)).thenReturn(GENERATED_TOKEN);
+        when(jwtTokenUtil.generateJwtToken(authenticationMock)).thenReturn(GENERATED_TOKEN);
 
         // Ejecución (Act)
         authService.login(TEST_USERNAME, TEST_PASSWORD);
 
         // Verificación (Assert)
-        // Verificamos que el método getPrincipal() fue llamado en el objeto Authentication
-        verify(authenticationMock, times(1)).getPrincipal();
-        // Aunque el token se generó (ver prueba 8), este test se centra en la extracción de UserDetails
-        // para garantizar que la lógica intermedia es correcta.
+        // Verificamos que solo se llama una vez a authenticate, garantizando la eficiencia.
+        verify(authenticationManager, times(1)).authenticate(any(UsernamePasswordAuthenticationToken.class));
     }
 }

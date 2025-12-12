@@ -23,7 +23,7 @@ public class DataInitializer {
         return (args) -> {
             System.out.println("Cargando datos iniciales...");
 
-            // --- 1. CARGA DE PRODUCTOS (VALORES ACTUALIZADOS) ---
+            // --- 1. CARGA DE PRODUCTOS (Se mantiene igual) ---
             if (productRepository.count() == 0) {
                 System.out.println("Cargando productos iniciales...");
 
@@ -55,7 +55,7 @@ public class DataInitializer {
                 productRepository.save(new Product(
                         "Plátanos cavendish",
                         800,
-                        "docena",
+                        "kg",
                         250,
                         103,
                         "Plátanos maduros y dulces...",
@@ -66,7 +66,7 @@ public class DataInitializer {
                 productRepository.save(new Product(
                         "Zanahorias Orgánicas",
                         900,
-                        "manojo",
+                        "kg",
                         100,
                         104,
                         "Zanahorias crujientes cultivadas sin pesticidas...",
@@ -88,7 +88,7 @@ public class DataInitializer {
                 productRepository.save(new Product(
                         "Pimientos tricolor",
                         1500,
-                        "unidad",
+                        "kg",
                         120,
                         106,
                         "Pimientos rojos, amarillos y verdes...",
@@ -99,7 +99,7 @@ public class DataInitializer {
                 productRepository.save(new Product(
                         "Miel orgánica",
                         5000,
-                        "tarro",
+                        "frasco",
                         50,
                         107,
                         "Miel pura y orgánica...",
@@ -132,18 +132,16 @@ public class DataInitializer {
                 System.out.println("Productos cargados. Total: " + productRepository.count());
             }
 
-            // --- 2. CREACIÓN DE USUARIO ADMINISTRADOR (Se mantiene igual) ---
+            // --- 2. CREACIÓN DE USUARIO ADMINISTRADOR ---
             final String adminUsername = "admin@huerto.cl";
+            final String adminPass = "password123";
 
             if (!userRepository.existsByUsername(adminUsername)) {
-                System.out.println("Creando usuario administrador: " + adminUsername);
-
-                // Contraseña sin cifrar: "password123"
-                String encodedPassword = passwordEncoder.encode("password123");
+                System.out.println("Creando usuario administrador: " + adminUsername + " / " + adminPass);
 
                 User adminUser = new User(
                         adminUsername,
-                        encodedPassword,
+                        passwordEncoder.encode(adminPass), // Contraseña: password123
                         "Administrador del Huerto",
                         List.of("ROLE_USER", "ROLE_ADMIN")
                 );
@@ -152,6 +150,26 @@ public class DataInitializer {
                 System.out.println("Usuario Admin creado exitosamente.");
             } else {
                 System.out.println("El usuario administrador ya existe.");
+            }
+
+            // --- 3. CREACIÓN DE USUARIO REGULAR (NUEVA ADICIÓN) ---
+            final String userUsername = "user@huerto.cl";
+            final String userPass = "password123";
+
+            if (!userRepository.existsByUsername(userUsername)) {
+                System.out.println("Creando usuario regular: " + userUsername + " / " + userPass);
+
+                User regularUser = new User(
+                        userUsername,
+                        passwordEncoder.encode(userPass), // Contraseña: password123
+                        "Usuario Regular de Prueba",
+                        List.of("ROLE_USER")
+                );
+
+                userRepository.save(regularUser);
+                System.out.println("Usuario Regular creado exitosamente.");
+            } else {
+                System.out.println("El usuario regular ya existe.");
             }
         };
     }
