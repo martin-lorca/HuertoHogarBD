@@ -1,15 +1,17 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.JwtResponse;
-import com.example.demo.model.User; // Necesario para el casting
+import com.example.demo.model.User;
 import com.example.demo.payload.request.LoginRequest;
 import com.example.demo.payload.request.SignupRequest;
+import com.example.demo.repository.UserRepository; // <<--- NUEVA IMPORTACIÓN
 import com.example.demo.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException; // Nueva importación para manejo de error
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -33,6 +35,9 @@ public class AuthController {
 
     @Autowired
     private AuthService authService;
+
+    @Autowired
+    private UserRepository userRepository; // <<--- NUEVA INYECCIÓN PARA BUSCAR EL USUARIO
 
     // ... (El método /register se mantiene igual y funciona correctamente)
     @PostMapping("/register")
@@ -83,31 +88,32 @@ public class AuthController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Username y password son requeridos."));
             }
 
-            // 1. Llama al servicio para autenticar y generar el token
+            // 1. Llama al servicio para autenticar y generar el token.
+            // Esto valida el usuario/contraseña y, si es exitoso, genera el JWT.
             String jwt = authService.login(loginRequest.getUsername(), loginRequest.getPassword());
 
-            // 2. Obtener el contexto de seguridad
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            // 2. Dado que el casting directo falla, buscamos la entidad User completa
+            // en la base de datos usando el username que acaba de ser validado.
+            User user = userRepository.findByUsername(loginRequest.getUsername())
+                    .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado después de la autenticación."));
 
-            // 3. Obtener detalles del usuario. Hacemos casting seguro a tu entidad User.
-            // Esto soluciona el error en .getId() y .getUsername()
-            User userDetails = (User) authentication.getPrincipal();
 
-            // 4. Mapear roles a List<String>. Esto soluciona el error en 'roles'.
-            List<String> roles = userDetails.getAuthorities().stream()
+            // 3. Mapear roles a List<String>. Usa la entidad 'user' obtenida.
+            List<String> roles = user.getAuthorities().stream()
                     .map(item -> item.getAuthority())
                     .collect(Collectors.toList());
 
-            // 5. Devolver la respuesta completa (JwtResponse)
+            // 4. Devolver la respuesta completa (JwtResponse)
             return ResponseEntity.ok(new JwtResponse(jwt,
-                    userDetails.getId(),
-                    userDetails.getUsername(),
+                    user.getId(), // Usamos la entidad 'user' para obtener el ID
+                    user.getUsername(),
                     roles));
         } catch (org.springframework.security.core.AuthenticationException e) {
-            // Manejar credenciales inválidas
+            // Manejar credenciales inválidas (Invalid username or password)
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Credenciales inválidas."));
         } catch (Exception e) {
-            // Error inesperado del servidor
+            // Error inesperado del servidor (incluyendo UsernameNotFoundException si falla la búsqueda)
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Ocurrió un error inesperado al iniciar sesión."));
         }
     }
