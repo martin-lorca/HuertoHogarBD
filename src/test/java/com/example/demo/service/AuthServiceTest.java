@@ -53,7 +53,7 @@ class AuthServiceTest {
     @Mock
     private Authentication authenticationMock;
     @Mock
-    private User userPrincipalMock; // Usamos la entidad User como Principal
+    private User userPrincipalMock;
 
 
     // =========================================================================

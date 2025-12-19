@@ -1,15 +1,15 @@
 package com.example.demo.config;
 
 import com.example.demo.security.JwtRequestFilter;
-import com.example.demo.service.UserDetailsServiceImpl; // <--- Importamos tu servicio específico
+import com.example.demo.service.UserDetailsServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider; // <--- Importación clave
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity; // <--- Nueva: para usar @PreAuthorize
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -17,36 +17,37 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true) // <--- NUEVO: Habilita el uso de @PreAuthorize en Controllers
+@EnableMethodSecurity(prePostEnabled = true)
 public class WebSecurityConfig {
 
-    // Cambiamos la inyección al tipo de tu implementación para ser más específico
     @Autowired
     private UserDetailsServiceImpl userDetailsService;
 
     @Autowired
     private JwtRequestFilter jwtRequestFilter;
 
-    // Definimos las rutas de Swagger/OpenAPI que deben ser públicas.
     private static final String[] SWAGGER_WHITELIST = {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html"
     };
 
-
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // --- NUEVOS BEANS PARA EL PROVEEDOR DE AUTENTICACIÓN ---
-
     @Bean
-    public DaoAuthenticationProvider authenticationProvider() { // <-- Configura el proveedor (UserService + Encoder)
+    public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
         authProvider.setUserDetailsService(userDetailsService);
         authProvider.setPasswordEncoder(passwordEncoder());
@@ -58,43 +59,50 @@ public class WebSecurityConfig {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
-    // --- FIN DE NUEVOS BEANS ---
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setExposedHeaders(Arrays.asList("Authorization"));
+        configuration.setAllowCredentials(true);
 
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 1. Deshabilitar CSRF
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
 
-                // 2. Definir las políticas de autorización
+                // 1. Gestión de sesión Stateless (JWT)
+                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                // 2. Reglas de Autorización
                 .authorizeHttpRequests(auth -> auth
-                        // 🎯 Rutas de Swagger/OpenAPI
+                        // Permitir Swagger y Auth
                         .requestMatchers(SWAGGER_WHITELIST).permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
 
-                        // 🎯 Endpoints públicos (Registro y Login)
-                        .requestMatchers("/api/auth/register", "/api/auth/signin").permitAll() // <--- Cambié login a signin para un estándar más común
+                        // 🎯 PRODUCTOS: El catálogo (GET) es para todos
+                        .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
 
-                        // 🎯 Endpoints de LECTURA (GET) de Productos: PÚBLICOS
-                        .requestMatchers(HttpMethod.GET, "/api/products", "/api/products/**").permitAll()
-
-                        // 🎯 Endpoints que REQUIEREN TOKEN (Autenticación)
-                        .requestMatchers("/api/cart", "/api/cart/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/products").authenticated()
+                        // 🎯 CARRITO Y MODIFICACIONES: Solo usuarios logueados
+                        .requestMatchers("/api/cart/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/products/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/products/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/products/**").authenticated()
 
-                        // 2.4. Cualquier otra petición
+                        // Cualquier otra ruta requiere token
                         .anyRequest().authenticated()
-                )
+                );
 
-                // 3. Configuración de sesión: Sin estado (STATELESS) para usar JWT
-                .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
-
-        // 4. Establecer el Authentication Provider
-        http.authenticationProvider(authenticationProvider()); // <--- AÑADIDO: Integra el proveedor
-
-        // 5. Agregar el filtro de JWT
+        // 3. Añadir el filtro JWT y el Provider
+        http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
