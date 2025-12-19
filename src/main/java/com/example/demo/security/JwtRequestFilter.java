@@ -1,6 +1,6 @@
 package com.example.demo.security;
 
-import com.example.demo.service.UserDetailsServiceImpl; // <--- AJUSTE 1: Importamos tu servicio específico
+import com.example.demo.service.UserDetailsServiceImpl;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,9 +19,8 @@ import java.io.IOException;
 @Component
 public class JwtRequestFilter extends OncePerRequestFilter {
 
-    // Inyectamos el servicio que carga al usuario de la DB
     @Autowired
-    private UserDetailsServiceImpl userDetailsService; // <--- AJUSTE 1: Usamos la clase específica
+    private UserDetailsServiceImpl userDetailsService;
 
     @Autowired
     private JwtTokenUtil jwtTokenUtil;
@@ -30,45 +29,53 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
 
+        // 🎯 MEJORA PASO 2: Bypass para el catálogo de productos
+        // Si es un GET a la API de productos, no procesamos nada y seguimos al siguiente filtro
+        if ("GET".equalsIgnoreCase(request.getMethod()) && request.getServletPath().startsWith("/api/products")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         final String requestTokenHeader = request.getHeader("Authorization");
 
         String username = null;
         String jwtToken = null;
 
-        // 1. Intentar extraer el token
-        if (requestTokenHeader != null && requestTokenHeader.startsWith("Bearer ")) {
-            jwtToken = requestTokenHeader.substring(7);
-
-            try {
-                // 2. Intentar obtener el username del token
-                username = jwtTokenUtil.getUserNameFromJwtToken(jwtToken); // <--- AJUSTE 2: Nombre de método
-            } catch (IllegalArgumentException e) {
-                logger.warn("No se pudo obtener el token JWT, probablemente malformado.", e);
-            } catch (ExpiredJwtException e) {
-                logger.warn("El token JWT ha expirado.", e);
-            }
+        // 1. SI NO HAY TOKEN: Pasamos al siguiente filtro de inmediato.
+        if (requestTokenHeader == null || !requestTokenHeader.startsWith("Bearer ") || requestTokenHeader.contains("null")) {
+            chain.doFilter(request, response);
+            return;
         }
 
-        // 3. Validar e inyectar el contexto de seguridad si el usuario fue extraído
+        // 2. EXTRAER TOKEN
+        jwtToken = requestTokenHeader.substring(7);
+
+        try {
+            username = jwtTokenUtil.getUserNameFromJwtToken(jwtToken);
+        } catch (IllegalArgumentException e) {
+            logger.warn("No se pudo obtener el token JWT, probablemente malformado.");
+        } catch (ExpiredJwtException e) {
+            logger.warn("El token JWT ha expirado.");
+        }
+
+        // 3. VALIDACIÓN
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            try {
+                UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+                if (jwtTokenUtil.validateJwtToken(jwtToken, userDetails)) {
+                    UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-            // Validar si el token es válido y corresponde al usuario
-            if (jwtTokenUtil.validateJwtToken(jwtToken, userDetails)) { // <--- AJUSTE 2: Nombre de método
-
-                // Crea el token de autenticación de Spring Security
-                UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                usernamePasswordAuthenticationToken
-                        .setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                // Establece el usuario en el contexto de seguridad para esta solicitud
-                SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
+                    SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+                }
+            } catch (Exception e) {
+                logger.error("Error al autenticar al usuario: " + username);
             }
         }
 
-        // 4. Continuar la cadena de filtros.
+        // 4. CONTINUAR
         chain.doFilter(request, response);
     }
 }
